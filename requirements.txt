@@ -1,0 +1,1 @@
+pandas numpy scipy matplotlib cvxpy cvxopt
