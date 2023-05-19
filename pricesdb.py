@@ -174,16 +174,20 @@ def get_topholdings_from_db(dbfile :str):
     if json_data is None:
         return None, None, None
     else:    
-        json_data = json.loads(json_data[0][0]) 
-        # erste 0 für 1. Zeile, zweite 0 für 1. Teil im Tupel (Zeile)
-        # besser wäre ein resultset als Daraframe
-        try:
-            holdings = json_data['quoteSummary']['result'][0]['topHoldings']['holdings']
-            df = pd.json_normalize(holdings)
-            return df, holdings, json_data
-        except KeyError:
-            print(f"""{dbfile} Key: json_data['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
-            return None, None, json_data
+        jsond = json.loads(json_data[0][0])
+        if jsond['quoteSummary']['result'] is not None:
+            # erste 0 für 1. Zeile, zweite 0 für 1. Teil im Tupel (Zeile)
+            # besser wäre ein resultset als Daraframe
+            try:
+                holdings = jsond['quoteSummary']['result'][0]['topHoldings']['holdings']
+                df = pd.json_normalize(holdings)
+                return df, holdings, jsond
+            except KeyError:
+                print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
+                return None, None, jsond
+        else:
+            print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
+            return None, None, jsond
 
 def request_build_headers():
     headers = {
