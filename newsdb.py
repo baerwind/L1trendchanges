@@ -117,5 +117,5 @@ def insert_list_by_symbol(conn, symbol, list_by_symboldf):
             print(str(e) + ' \ninsert_sql: '+ insert_sql +' \nund weiter...')
             pass
     conn.commit()
-    print(f'{symbol}: {str(index)} rows inserted')
+    print(f'{symbol}: {str(index)} rows/news inserted')
     return conn
