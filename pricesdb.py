@@ -174,21 +174,25 @@ def get_topholdings_from_db(dbfile :str):
     if json_data is None:
         return None, None, None
     else:    
-        jsond = json.loads(json_data[0][0])
-        if jsond['quoteSummary']['result'] is not None:
-            # erste 0 für 1. Zeile, zweite 0 für 1. Teil im Tupel (Zeile)
-            # besser wäre ein resultset als Daraframe
-            try:
-                holdings = jsond['quoteSummary']['result'][0]['topHoldings']['holdings']
-                df = pd.json_normalize(holdings)
-                return df, holdings, jsond
-            except KeyError:
+        try:
+            jsond = json.loads(json_data[0][0])
+            if jsond['quoteSummary']['result'] is not None:
+                # erste 0 für 1. Zeile, zweite 0 für 1. Teil im Tupel (Zeile)
+                # besser wäre ein resultset als Daraframe
+                try:
+                    holdings = jsond['quoteSummary']['result'][0]['topHoldings']['holdings']
+                    df = pd.json_normalize(holdings)
+                    return df, holdings, jsond
+                except KeyError:
+                    print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
+                    return None, None, jsond
+            else:
                 print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
                 return None, None, jsond
-        else:
-            print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
-            return None, None, jsond
-
+        except Exception as e:
+            print(f"""{dbfile} Fehler mit json: {json_data}""")
+            return None, None, None
+        
 def request_build_headers():
     headers = {
         "X-RapidAPI-Key": '', # hier muss der APIKey hinein, oder in die Umgebungsvariable X-RapidAPI-Key

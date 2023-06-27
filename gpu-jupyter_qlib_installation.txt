@@ -1,0 +1,11 @@
+git clone https://github.com/iot-salzburg/gpu-jupyter.git
+cd gpu-jupyter
+git branch  # Check for extisting branches
+git checkout v1.5_cuda-11.6_ubuntu-20.04  # select or create a new version
+# generate the Dockerfile with python and without Julia and R (see options: --help)
+./generate-Dockerfile.sh --python-only
+docker build -t gpu-jupyter .build/  # will take a while
+docker run --gpus all -d -it -p 8848:8888 -v $(pwd)/data:/home/jovyan/work -e GRANT_SUDO=yes -e JUPYTER_ENABLE_LAB=yes -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" --user root --restart always --name gpu-jupyter_1 gpu-jupyter
+
+
+python scripts/get_data.py qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
