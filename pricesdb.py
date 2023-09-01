@@ -163,7 +163,7 @@ def get_topholdings_from_db(dbfile :str):
         exit()
     sql = """select json_data from json_table \
                 where endpoint = 'topholdings' \
-                and date = (select max(date) from json_table group by date, symbol, region, endpoint);"""
+                and date = (select max(date) from json_table);"""
     cur = conn.cursor()
     try:
         cur.execute(sql)
@@ -218,7 +218,7 @@ def get_topholdings(symbol, region):
     try:
         resp = response.json()
         json_data = json.dumps(resp)
-        json_data = response
+        #json_data = response
     except json.JSONDecodeError as err:
         json_data = None
         print(str(err) + f' {symbol}_{region} - continue')
