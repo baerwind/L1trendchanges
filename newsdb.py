@@ -119,3 +119,19 @@ def insert_list_by_symbol(conn, symbol, list_by_symboldf):
     conn.commit()
     print(f'{symbol}: {str(index)} rows/news inserted')
     return conn
+
+def create_table_sentiment_title_list(conn):
+    """Zur Initialisierung der Tabelle sentiment_title_list in der DB"""
+    create_table = """CREATE TABLE sentiment_title_list (
+        'id' INTEGER PRIMARY KEY, 
+        'sentiment' TEXT,
+        'modelname' TEXT,
+        'dtupdate'     TIMESTAMP);"""
+    try:
+        c = conn.cursor()
+        c.execute(create_table)
+        #c.execute(create_table_pk)
+        return conn
+    except sqlite3.Error as e:
+        print(str(e) + '/n failed sql:' + create_table)
+    return conn
