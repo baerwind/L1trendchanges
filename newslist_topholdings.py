@@ -74,21 +74,43 @@ def insert_sentiment_title_list(conn, dfsentiment, modelname= 'yiyanghkust/finbe
     print(f'{modelname}: {str(index)} rows inserted')
     return conn
 
-def newslist_topholdings(groupl = [10,40]):
+def generate_plotdf(file_sentiment_result, file_sentiment_for_plot):
+    # plotdf für Darstellung vorbereiten
+    agg_top_sentiment = pd.read_csv(file_sentiment_result)
+    agg_top_sentiment['symboltitle'] = agg_top_sentiment['symbol'] + ' : ' + agg_top_sentiment['attributes.title']
+    
+    #plotdf ist der Teil, der in der ax überlagert dargestellt werden soll 
+    plotdf_group = agg_top_sentiment.groupby(['publishDate','yahoo_symbol','label'])
+    plotdf = agg_top_sentiment.groupby(['publishDate','yahoo_symbol','label']).agg({'symboltitle' : ';\r\n'.join})
+    #plotdf = plotdf_group.size().reset_index(level=['yahoo_symbol','label'])
+    plotdf['size'] = plotdf_group.size()
+    plotdf = plotdf.reset_index()
+
+    pivot_df = plotdf.pivot_table('size',index=['yahoo_symbol','publishDate'], columns='label').fillna(0).copy().reset_index()
+    plotdf['Neutral_text'] = plotdf[plotdf['label']=='Neutral']['symboltitle']
+    plotdf['Positive_text'] = plotdf[plotdf['label']=='Positive']['symboltitle']
+    plotdf['Negative_text'] = plotdf[plotdf['label']=='Negative']['symboltitle']
+    plot_df = pd.merge(pivot_df, plotdf.dropna(subset=['Neutral_text']).reset_index()[['yahoo_symbol','publishDate','Neutral_text']], on=['yahoo_symbol','publishDate'], how='left')
+    plot_df = pd.merge(plot_df, plotdf.dropna(subset=['Positive_text']).reset_index()[['yahoo_symbol','publishDate','Positive_text']], on=['yahoo_symbol','publishDate'], how='left')
+    plot_df = pd.merge(plot_df, plotdf.dropna(subset=['Negative_text']).reset_index()[['yahoo_symbol','publishDate','Negative_text']], on=['yahoo_symbol','publishDate'], how='left')
+
+    plot_df.to_csv(file_sentiment_for_plot)
+
+def newslist_topholdings(controllist, groupl=[10,40]):
     #Variables
     file_no_news = 'data\\no_news.csv'
     file_newsdb = 'data/seeking-alpha.db'
-    file_watchlist = 'watchlist.csv'
     file_sentiment_result=f"""data\\agg_top_sentiment_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
     file_sentiment_for_plot=f"""data\\sentiment_plotdf_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
 
 
     # Laden der topholdings, die letzten 20 news zu jeder Holding von seekingalpha holen und in die newsdb speichern
     # Symbols aus Watchlist
-    watchlist = pd.read_csv(file_watchlist, sep=';')
-    #groupl = [10,40] #[20,30] haben sowieso keine Holdingliste
-    controllist = watchlist[watchlist['group'].isin(groupl)].reset_index()
+    # watchlist = pd.read_csv(file_watchlist, sep=';')
+    # groupl = [10,40] #[20,30] haben sowieso keine Holdingliste
+    #controllist = watchlist[watchlist['group'].isin(groupl)].reset_index()
 
+    controllist = controllist[controllist['group'].isin(groupl)].reset_index()
     querylist, agg_tophdf = get_topholdings_for_controllist(controllist)
 
     no_news = load_no_news_symbols(file_no_news = 'data\\no_news.csv')
@@ -153,17 +175,7 @@ def newslist_topholdings(groupl = [10,40]):
     # speichern
     agg_top_sentiment.to_csv(file_sentiment_result)
 
-    # plotdf für Darstellung vorbereiten
-    #agg_top_sentiment = pd.read_csv(file_sentiment_result)
-    #plotdf ist der Teil, der in der ax überlagert dargestellt werden soll 
-    plotdf = agg_top_sentiment[['publishDate','yahoo_symbol','label']].dropna()
-    # plotdf.index = pd.to_datetime(plotdf['publishDate'])
-    # plotdf = plotdf.drop(['publishDate'], axis=1)
-    plotdf_group = plotdf.groupby(['publishDate','yahoo_symbol','label'])
-    plotdf = plotdf_group.size().reset_index(level=['yahoo_symbol','label'])
-    plotdf.columns = ['yahoo_symbol','label','size']
+    generate_plotdf(file_sentiment_result,file_sentiment_for_plot)
 
-    plotdf = plotdf.pivot_table('size',index=['yahoo_symbol','publishDate'], columns='label').fillna(0)
-    plotdf.to_csv(file_sentiment_for_plot)
 # plotdf
 # plotdf.index.max()

@@ -21,7 +21,7 @@ import datetime
 import sqlite3
 import pricesdb
 import json
-import newslist_topholdings
+#import newslist_topholdings
 
 
 # functions für den DB Teil
@@ -150,24 +150,18 @@ def calc_slope_diff(trendchangesd, prev_trendchangesd, trendlined, prev_trendlin
     
     return new_trendchng, diff_st_trend, st_trend, st_prev_trend
 
-def calc_l1trendchanges(groupl=[10,20,30,40]):
-    # für alle symbols in der controllist, prices aus DB holen und alle calculations produzieren
-
-    # Symbols aus Watchlist
-    watchlist = pd.read_csv('watchlist.csv', sep=';')
-    #groupl = [21] #[10,20,30,40] 
-    controllist = watchlist[watchlist['group'].isin(groupl)].reset_index()
-
-
+def get_prices_toph(controllist):
     # actual prices and topholdings from provider
     for i in range(len(controllist)):
-        print(controllist['tradv_ticker'][i])
-        symbol = controllist['yahoo_symbol'][i]
-        region = controllist['region'][i]
+        print(controllist['tradv_ticker'].iloc[i])
+        symbol = controllist['yahoo_symbol'].iloc[i]
+        region = controllist['region'].iloc[i]
         
         conn = pricesdb.get_prices_update_dbs(symbol, region)
         conn = pricesdb.get_topholdings_update_dbs(symbol,region)
 
+
+def calc_l1trendchanges(controllist):
     # Hauptroutine
     # all together now
     # alle vorhandenen DBs lesen und die Trends rechnen und darstellen 
@@ -184,7 +178,6 @@ def calc_l1trendchanges(groupl=[10,20,30,40]):
     gtophdf = pd.DataFrame()
 
     for i, yahoo_symbol in enumerate(controllist['yahoo_symbol']):
-        #f = glob.glob(r"data/"+controllist['yahoo_symbol'][i] + "_*.db")[0]
         f = glob.glob(r"data/"+ yahoo_symbol + "_*.db")[0]
         prices_sorted = pricesdb.get_prices_from_db(f)
         topholdingsdf, _, _ = pricesdb.get_topholdings_from_db(f)
@@ -203,10 +196,6 @@ def calc_l1trendchanges(groupl=[10,20,30,40]):
 
     gresultdf.to_csv(f"data\\gresult {datetime.datetime.now().strftime('%Y-%m-%d')}.csv")
     prev_gresultdf.to_csv(f"data\\prev_gresult {datetime.datetime.now().strftime('%Y-%m-%d')}.csv")
-
-    # vorher die newslist_topholdings ziehen
-    newslist_topholdings.newslist_topholdings(groupl=groupl)
-
 
 def generate_ggresult_from_data():
     #neueste sentimentDaten lesen
@@ -269,6 +258,22 @@ def read_ggresult():
     prev_gresultdf = extract_prev_gresultdf_from_gresultdf(gresultdf)
     return gresultdf, prev_gresultdf
 
+def plot_sentiment(ax, symbolgresult, withNeutral=True):
+    if not symbolgresult[['Negative','Neutral','Positive']].isna().all().all() == True > 0:
+        ax_sentiment = ax.twinx()
+        # Farben für die verschiedenen Sentiment-Labels definieren
+        color_map = {
+            'Positive': 'tab:green',
+            'Neutral': 'tab:blue',
+            'Negative': 'tab:red'
+        }
+        ax_sentiment.vlines(symbolgresult['Positive'].index, 0, symbolgresult['Positive'], color=color_map['Positive'], linewidth=1, linestyles='dashed')
+        if withNeutral == True:
+            ax_sentiment.vlines(symbolgresult['Neutral'].index, -0.5, 0.5 , color=color_map['Neutral'], linewidth=1, linestyles='dashed')
+        ax_sentiment.vlines(symbolgresult['Negative'].index, 0, -symbolgresult['Negative'], color=color_map['Negative'], linewidth=1, linestyles='dashed')
+        ax_sentiment.axhspan(0, 0, xmin=0, xmax=1,color='tab:grey')
+
+
 def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral=True):
     # Ab hier Darstellung
     # Darstellung neu mit gresult
@@ -310,7 +315,6 @@ def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral
             trendlined = symbolgresult['trendline_lambda_1']
             prev_trendlined = prev_symbolgresult['trendline_lambda_1']
             #1208 prev_trendlined = symbolgresult['prev_trendline_lambda_1']
-
 
             trendchangesd = symbolgresult[symbolgresult['trendchanges_lambda_1'] == True]['trendchanges_lambda_1']
             prev_trendchangesd = prev_symbolgresult[prev_symbolgresult['trendchanges_lambda_1'] == True]['trendchanges_lambda_1']
@@ -362,22 +366,11 @@ def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral
                 new_trendchnga, diff_st_trend, st_trend, st_prev_trend = calc_slope_diff(trendchangesd, prev_trendchangesd, trendlined, prev_trendlined)
                 ax[row,1].axvspan(trendchangesd.index.max(), trendlined.index.max(), facecolor=mapper.to_rgba(1000*st_trend) , alpha=0.2 )
                 new_trendchngs = [pd.to_datetime(str(x)).strftime('%Y-%m-%d') for x in new_trendchnga]
-                
             
             #sentiment
-            if not symbolgresult[['Negative','Neutral','Positive']].isna().all().all() == True > 0:
-                ax_sentiment = ax[row,1].twinx()
-                # Farben für die verschiedenen Sentiment-Labels definieren
-                color_map = {
-                    'Positive': 'tab:green',
-                    'Neutral': 'tab:blue',
-                    'Negative': 'tab:red'
-                }
-                ax_sentiment.vlines(symbolgresult['Positive'].index, 0, symbolgresult['Positive'], color=color_map['Positive'], linewidth=1, linestyles='dashed')
-                if withNeutral == True:
-                    ax_sentiment.vlines(symbolgresult['Neutral'].index, -0.5, 0.5 , color=color_map['Neutral'], linewidth=1, linestyles='dashed')
-                ax_sentiment.vlines(symbolgresult['Negative'].index, 0, -symbolgresult['Negative'], color=color_map['Negative'], linewidth=1, linestyles='dashed')
-                ax_sentiment.axhspan(0, 0, xmin=0, xmax=1,color='tab:grey')
+
+
+            plot_sentiment(ax[row,1], symbolgresult, withNeutral)
 
             cell_text = []
             cell_text.append(['Ticker:' , symbolgresult['symbol'].max()])# controllist['tradv_ticker'][j]])
@@ -405,4 +398,169 @@ def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral
             #the_table.visible_edges = 'B'
             ax[row,0].set_axis_off()
             ax[row,0].add_table(the_table)
+
+
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.io as pio
+import plotly.express as px
+
+def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral=True):
+    numsymbols = len(list(gresultdf['symbol'].drop_duplicates()))
+    numlambdas = len(lambda_list)
+    fig = go.Figure()
+    # Create subplot for each symbol and lambda value
+    fig = make_subplots(numsymbols*numlambdas, 1, shared_yaxes=True)
+    gresultdf['date']=pd.to_datetime(gresultdf['date'])  # Change 'date' column to type date
+    prev_gresultdf['date']=pd.to_datetime(prev_gresultdf['date'])  # Change 'date' column to type date
+
+    for j, symbol in enumerate(list(gresultdf['symbol'].drop_duplicates())):
+        for i, lambda_val in enumerate(lambda_list):
+            symbol_gresultdf = gresultdf[gresultdf['symbol'] == symbol]
+            symbol_prev_gresultdf = prev_gresultdf[prev_gresultdf['symbol'] == symbol]
+            symbol_gresultdf = symbol_gresultdf.sort_values(by='date',ascending=True)
+            symbol_gresultdf[f'agg_slope_until_lambda_{lambda_val}'] = symbol_gresultdf[f'agg_slope_until_lambda_{lambda_val}'].fillna(method='bfill')
+            symbol_gresultdf[f'prev_agg_slope_until_lambda_{lambda_val}'] = symbol_gresultdf[f'prev_agg_slope_until_lambda_{lambda_val}'].fillna(method='bfill')
+
+            row = (j+(i*numlambdas)+i) +1
+            # Plot close prices
+            fig.add_trace(go.Scatter(
+                x=symbol_gresultdf['date'],
+                y=symbol_gresultdf['close_start_1'],
+                mode='lines',
+                name='close',
+                text=symbol_gresultdf['close'],
+                hovertemplate = '<i>Price</i>: %{text:.2f}',
+                # '<br><b>X</b>: %{x}<br>'+
+                # '<b>%{text}</b>',
+                showlegend = False,
+                line=dict(color="blue"),
+            ), row=row, col=1)
+
+            # Add a line every Month
+            first_day_of_month = symbol_gresultdf[symbol_gresultdf['date'].dt.is_month_start]['date']
+            fig.update_xaxes(
+                tickvals=first_day_of_month,
+                ticktext=first_day_of_month.dt.strftime("%Y-%m-%d"),
+                row=row, col=1
+            )  
+
+            # Plot trend lines
+            fig.add_trace(go.Scatter(
+                x=symbol_gresultdf['date'],
+                y=symbol_gresultdf[f'trendline_lambda_{lambda_val}'],
+                mode='lines',
+                name=f'trend (L{lambda_val})',
+                text=symbol_gresultdf[f'agg_slope_until_lambda_{lambda_val}'],
+                hovertemplate = '<i>Slope</i>: %{text:.2f}',
+                #showlegend = False
+                line=dict(color="red"),
+            ),row=row, col=1)
+
+            # Plot trend changes
+            fig.add_trace(go.Scatter(
+                x=symbol_gresultdf['date'],
+                y=symbol_gresultdf[f'agg_trendlinevalue_lambda_{lambda_val}'],
+                mode='markers',
+                name=f'trend chng (L{lambda_val})',
+                text=symbol_gresultdf['date'].dt.strftime("%Y-%m-%d"),
+                hovertemplate = ': %{text}',
+                marker=dict(
+                    color="green"
+                ),
+                showlegend = False,
+            ),row=row, col=1)
+
+            # Plot prev trend lines
+            fig.add_trace(go.Scatter(
+                x=symbol_gresultdf['date'],
+                y=symbol_gresultdf[f'prev_trendline_lambda_{lambda_val}'],
+                mode='lines',
+                name=f'prev_trend(L{lambda_val})',
+                text=symbol_gresultdf[f'prev_agg_slope_until_lambda_{lambda_val}'],
+                hovertemplate = '<i>Slope</i>: %{text:.2f}',
+                #showlegend = False,
+                line=dict(color="orange"),
+            ),row=row, col=1)
+
+            # Add vertical lines on specific dates
+            # Plot buy and sell signals
+            trendchanges = symbol_gresultdf[symbol_gresultdf['trendchanges_lambda_1'] == True]
+            for change in trendchanges.itertuples():
+                if change.agg_buy_lambda_1 == True:
+                    color="green"#"Red",  # or "Green"
+                elif change.agg_sell_lambda_1 == True:
+                    color="red"  # or "Green"
+                else:
+                    color="lightgrey"
+                if color in ["green","red"]: # sonst dauert es zu lange
+                    #fig.add_vline(x=change.date, line_dash='dash', line_color=color, annotation_text=f"{change.date.strftime('%Y-%m-%d')}", row=row, col=1)
+                    fig.add_shape(
+                        yref='y domain',
+                        type="line",
+                        x0=change.date,
+                        y0=0,
+                        x1=change.date,
+                        y1=1,
+                        line=dict(
+                            color=color,
+                            width=1,
+                        ), 
+                        row=row, col=1
+                    )
+
+                    fig.add_annotation(
+                        yref='y domain',
+                        x=change.date,
+                        y=0.1,
+                        text= f"{change.date.strftime('%Y-%m-%d')}", #<br>{(change.agg_slope_until_lambda_1 + change.prev_agg_slopechange_lambda_1):.4f}
+                        showarrow=False,
+                        font=dict(
+                            size=12,
+                            color="Black"
+                        ),
+                        # bgcolor="White",
+                        opacity=0.8,
+                        row=row, col=1
+                    )
+
+            # last trendchange
+            last_change = symbol_gresultdf.iloc[-1]
+            # Set subplot titles
+            fig.add_annotation(
+                xref='x domain',
+                yref='y domain',
+                x=0.01,
+                y=0.99,
+                # get last slope
+                # get last slope change
+                text=f"Symbol: {symbol} \
+                    last slope:{(last_change.agg_slope_until_lambda_1 + last_change.prev_agg_slopechange_lambda_1):.4f} \
+                    last slope change:{last_change.agg_slopechange_lambda_1:.4f}",
+                showarrow=False,
+                row=row, col=1)
+
+    # Set layout for the entire figure
+    fig.update_layout(
+        height=numsymbols * 300,
+        width=1000,
+        showlegend=False,
+        title="Trendfilter L1 with trendlines and events"
+    )
+    fig.update_layout(hovermode="x unified")
+
+    # Show the interactive plot
+    pio.write_html(fig, r'data\\output.html')
+    fig.show()
+#rewrite plotallplotly to use ggresult
+#use small images in a grid to show the trendlines and the sentiment
+#use interactive plotly to show the trendlines and the sentiment
+
+# add vertical lines for each entry in sentiment
+def plotnews(fig, gresultdf):
+    for i in range(len(gresultdf)):
+        if gresultdf.iloc[i, 1] == 1:
+            fig.add_vline(x=gresultdf.iloc[i, 0], line_width=1, line_color='red')
+    return fig
 
