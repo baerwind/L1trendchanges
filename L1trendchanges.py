@@ -406,6 +406,49 @@ from plotly.subplots import make_subplots
 import plotly.io as pio
 import plotly.express as px
 
+# plot newstraces
+def add_news_traces(publishDate, yl, text, colorstr, traces):
+    traces.append(go.Scatter(x=[publishDate]*2, 
+                            y=yl, 
+                            mode='lines', 
+                            hovertext=text.replace(';','<br>'),
+                            showlegend=False,
+                            line={"color":colorstr, 'width': 1 }
+                            ))
+    return traces
+    
+def generate_newstraces(symbol_gresultdf):
+    # colors sentiment
+    alpha = ',1)'
+    red = 'rgba( 235, 51, 36'+ alpha
+    green = 'rgba( 117, 249, 77'+ alpha
+    blue = 'rgba( 0, 35, 245'+ alpha
+    colorstr = blue
+
+    yrange = (symbol_gresultdf['close_start_1'].max() -symbol_gresultdf['close_start_1'].min())*0.4 # 20% der gesamten yrange für news sentiment
+    if symbol_gresultdf['Positive'].max() >= symbol_gresultdf['Negative'].max():
+        stepmax = symbol_gresultdf['Positive'].max()
+    else:
+        stepmax = symbol_gresultdf['Negative'].max()
+    step = (yrange/2)/stepmax  
+    yrangemin = 1-(stepmax*step)
+    yrangemax = 1+(stepmax*step)
+
+    newsdf = symbol_gresultdf[['publishDate', 'Negative', 'Neutral', 'Positive','Neutral_text', 'Positive_text', 'Negative_text']].dropna()
+    traces = []
+    for idx, publishDate in enumerate(newsdf['publishDate']):
+        if newsdf.iloc[idx,:]['Negative'] > 0:
+            yl = [1 - (step * newsdf.iloc[idx,:]['Negative']), 1]
+            traces = add_news_traces(publishDate, yl, newsdf.iloc[idx,:]['Negative_text'], red, traces)
+        if newsdf.iloc[idx,:]['Neutral'] > 0:
+            yl = [1 - step, 1 + step]
+            traces = add_news_traces(publishDate, yl, newsdf.iloc[idx,:]['Neutral_text'], blue, traces)
+        if newsdf.iloc[idx,:]['Positive'] > 0:
+            yl = [1, 1 + (step * newsdf.iloc[idx,:]['Positive'])]
+            traces = add_news_traces(publishDate, yl, newsdf.iloc[idx,:]['Positive_text'], green, traces)
+
+    return traces
+
 def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral=True):
     numsymbols = len(list(gresultdf['symbol'].drop_duplicates()))
     numlambdas = len(lambda_list)
@@ -430,9 +473,13 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                 y=symbol_gresultdf['close_start_1'],
                 mode='lines',
                 name='close',
-                text=symbol_gresultdf['close'],
-                hovertemplate = '<i>Price</i>: %{text:.2f}',
-                # '<br><b>X</b>: %{x}<br>'+
+                text='<br><b>Price:</b><br>'+ symbol_gresultdf['close'].apply(lambda x: '{:,.2f}'.format(x)).astype(str) + \
+                    '<br>' + symbol_gresultdf['date'].dt.strftime("%Y-%m-%d") 
+                    # '<br><b>Positive:</b><br>'+ symbol_gresultdf['Positive_text'].str.replace(';','<br>') + \
+                    # '<br><b>Negative:</b><br>'+ symbol_gresultdf.Negative_text.str.replace(';','<br>')
+                    , 
+                hovertemplate = '%{text}',
+                # '<br><b>X</b>: %{x}<br>'+ 
                 # '<b>%{text}</b>',
                 showlegend = False,
                 line=dict(color="blue"),
@@ -458,20 +505,6 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                 line=dict(color="red"),
             ),row=row, col=1)
 
-            # Plot trend changes
-            fig.add_trace(go.Scatter(
-                x=symbol_gresultdf['date'],
-                y=symbol_gresultdf[f'agg_trendlinevalue_lambda_{lambda_val}'],
-                mode='markers',
-                name=f'trend chng (L{lambda_val})',
-                text=symbol_gresultdf['date'].dt.strftime("%Y-%m-%d"),
-                hovertemplate = ': %{text}',
-                marker=dict(
-                    color="green"
-                ),
-                showlegend = False,
-            ),row=row, col=1)
-
             # Plot prev trend lines
             fig.add_trace(go.Scatter(
                 x=symbol_gresultdf['date'],
@@ -484,9 +517,26 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                 line=dict(color="orange"),
             ),row=row, col=1)
 
-            # Add vertical lines on specific dates
-            # Plot buy and sell signals
+            # trendchanges
             trendchanges = symbol_gresultdf[symbol_gresultdf['trendchanges_lambda_1'] == True]
+
+            # Plot markers trend changes
+            fig.add_trace(go.Scatter(
+                x=trendchanges['date'],
+                y=trendchanges[f'agg_trendlinevalue_lambda_{lambda_val}'],
+                mode='markers',
+                name=f'trend chng (L{lambda_val})',
+                text=trendchanges['date'].dt.strftime('%Y-%m-%d') +"<br>slope change: "+trendchanges['agg_slopechange_lambda_1'].apply(lambda x: '{:,.2f}'.format(x)).astype(str),
+                hovertemplate = '%{text}',
+                marker=dict(
+                    color="green"
+                ),
+                showlegend = False,
+            ),row=row, col=1)
+
+
+            # Add vertical lines on trendchanges
+            # Plot buy and sell signals
             for change in trendchanges.itertuples():
                 if change.agg_buy_lambda_1 == True:
                     color="green"#"Red",  # or "Green"
@@ -526,7 +576,7 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                     )
 
             # last trendchange
-            last_change = symbol_gresultdf.iloc[-1]
+            #last_change = symbol_gresultdf.iloc[-1]
             # Set subplot titles
             fig.add_annotation(
                 xref='x domain',
@@ -536,11 +586,17 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                 # get last slope
                 # get last slope change
                 text=f"Symbol: {symbol} \
-                    last slope:{(last_change.agg_slope_until_lambda_1 + last_change.prev_agg_slopechange_lambda_1):.4f} \
-                    last slope change:{last_change.agg_slopechange_lambda_1:.4f}",
+                    last slope:{(symbol_gresultdf['agg_slope_until_lambda_1'].iloc[-1] + symbol_gresultdf['prev_agg_slope_until_lambda_1'].dropna().iloc[-1]):.4f} \
+                    last slope change:{symbol_gresultdf['agg_slopechange_lambda_1'].dropna().iloc[-1]:.4f} ",
                 showarrow=False,
                 row=row, col=1)
 
+            # add sentimenten traces
+            # test if there are sentiment news
+            if symbol_gresultdf[['publishDate', 'Negative', 'Neutral', 'Positive']].dropna().shape[0] > 0:
+                newstraces = generate_newstraces(symbol_gresultdf)
+                fig.add_traces(newstraces,rows=row, cols=1)
+            
     # Set layout for the entire figure
     fig.update_layout(
         height=numsymbols * 300,
@@ -548,19 +604,12 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
         showlegend=False,
         title="Trendfilter L1 with trendlines and events"
     )
-    fig.update_layout(hovermode="x unified")
+    #fig.update_layout(hovermode="x unified")
 
     # Show the interactive plot
-    pio.write_html(fig, r'data\\output.html')
+    pio.write_html(fig, f"data\\output_{datetime.datetime.now().strftime('%Y-%m-%d')}.html")
     fig.show()
 #rewrite plotallplotly to use ggresult
 #use small images in a grid to show the trendlines and the sentiment
-#use interactive plotly to show the trendlines and the sentiment
 
-# add vertical lines for each entry in sentiment
-def plotnews(fig, gresultdf):
-    for i in range(len(gresultdf)):
-        if gresultdf.iloc[i, 1] == 1:
-            fig.add_vline(x=gresultdf.iloc[i, 0], line_width=1, line_color='red')
-    return fig
 
