@@ -331,7 +331,12 @@ def get_prices_update_dbs(symbol, region):
         prices = prices.drop(['adjclose'], axis=1)
 
     # prices in db schreiben
-    prices.to_sql('prices', conn, if_exists='append' , index=False)
+    try:
+        prices.to_sql('prices', conn, if_exists='append' , index=False)
+    except sqlite3.Error as e:
+        print(e)
+        print(f"""{symbol}_{region} - pricesdb.prices.to_sql('prices', conn, if_exists='append' , index=False) - error but continue""")
+        pass
     if eventsavailable ==  True:
         # auch für events schon vorhandene aus DB löschen
         e_dates = events['date'].drop_duplicates()
