@@ -263,6 +263,63 @@ def get_topholdings_update_dbs(symbol, region):
 
     return conn
 
+def get_summary(symbol, region):
+    url = "https://yh-finance.p.rapidapi.com/stock/v2/get-summary"
+
+    querystring = {"symbol":symbol,"region":region,"lang":"en-US"}
+    headers = request_build_headers()
+    response = requests.request("GET", url, headers=headers, params=querystring)
+    try:
+        resp = response.json()
+        json_data = json.dumps(resp)
+        #json_data = response
+    except json.JSONDecodeError as err:
+        json_data = None
+        print(str(err) + f' {symbol}_{region} - continue')
+        pass
+    return json_data
+
+
+def get_summary_update_dbs(symbol, region):
+    """
+    --CREATE TABLE my_table (id INTEGER PRIMARY KEY, json_data JSON);
+    --INSERT INTO my_table (json_data) VALUES (json('<json_data_here>'));
+    --SELECT json_extract(json_data, '$.key') FROM my_table;
+    """
+    json_data = get_summary(symbol, region)
+    
+    # connection 
+    conn = create_connection(r"data/"+symbol+"_"+region+".db")
+    date = datetime.datetime.today().strftime('%Y-%m-%d')
+    endpoint = 'summary'
+
+    sql = f"""delete from json_table where date='{date}' and  symbol='{symbol}' and region='{region}'"""
+    cur = conn.cursor()
+    try:
+        cur.execute(sql)
+        conn.commit()
+    except sqlite3.Error as e:
+        print(str(e) + ' \nsql: '+sql)
+
+    if json_data is None:
+        return conn
+    else:
+        sql = f"""INSERT INTO json_table (date, symbol, region, endpoint, json_data) \
+            VALUES ('{date}','{symbol}','{region}','{endpoint}','{json_data}');"""
+        cur = conn.cursor()
+        try:
+            cur.execute(sql)
+            conn.commit()
+            print(f'topholdings updated for {symbol}_{region}')
+        except sqlite3.Error as e:
+            print(str(e) + ' \nsql: '+sql)
+            print(f"""INSERT INTO json_table (date, symbol, region, endpoint) VALUES ('{date}','{symbol}','{region}','{endpoint}') - error but continue""")
+            pass
+
+    return conn
+
+
+
 def get_historical_data(symbol, region):
     """
     get data from yahoo

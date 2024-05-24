@@ -22,9 +22,9 @@ def get_news_list_by_symbol(symbol):
 		list_by_symbold = json.loads(response.text)
 		if 'errors' in list_by_symbold:
 			print(f'errors in response for {symbol}')
-			return None, response 
+			return None, response
 		list_by_symboldf = pd.json_normalize(list_by_symbold['data'])
-	except json.JSONDecodeError as e:
+	except Exception as e:
 		print(str(e) + ' \nresponse:' + str(response))
 		list_by_symboldf = None
 		pass

@@ -44,8 +44,11 @@ def calc_trendlines(y, lambda_list, solver, reg_norm):
         objective = cvxpy.Minimize(0.5 * cvxpy.sum_squares(y-x) 
                     + lambda_value * cvxpy.norm(D@x, reg_norm))    # Note: D@x is syntax for matrix multiplication    
         problem = cvxpy.Problem(objective)
-        problem.solve(solver=solver, verbose=False)
-
+        try:
+            problem.solve(solver=solver, verbose=False)
+        except cvxpy.error.SolverError as errorstr:
+            print(f"Solver error lambda_value: {lambda_value}, {errorstr} ")
+            return None, None
         trendlinesl.append(np.array(x.value))
         
         # trendchanges index
@@ -111,6 +114,11 @@ def transform_calc_trendlines(prices, lambda_list, solver, reg_norm):
 
     resultdf = prices
     resultdf['date'] = pd.to_datetime(resultdf['date'])
+
+    # falls der optimierer in calc_trendlines ein problem hatte, funktionert die For loop nicht
+    if trendlinesl is None or trendchangesl is None:
+        return prices, trendlinedl, trendchangesdl, aggtchangesl, resultdf
+
     for i, (trendline, trendchanges, lambdaf) in enumerate(zip(trendlinesl, trendchangesl, lambda_list)):
         trendlined = pd.DataFrame(trendline,pd.to_datetime(prices['date']))
         trendlinedl.append(trendlined)
@@ -426,10 +434,12 @@ def generate_newstraces(symbol_gresultdf):
     colorstr = blue
 
     yrange = (symbol_gresultdf['close_start_1'].max() -symbol_gresultdf['close_start_1'].min())*0.4 # 20% der gesamten yrange für news sentiment
-    if symbol_gresultdf['Positive'].max() >= symbol_gresultdf['Negative'].max():
+    if symbol_gresultdf['Positive'].max() > symbol_gresultdf['Negative'].max():
         stepmax = symbol_gresultdf['Positive'].max()
-    else:
+    elif symbol_gresultdf['Positive'].max() < symbol_gresultdf['Negative'].max():
         stepmax = symbol_gresultdf['Negative'].max()
+    else:
+        stepmax = 1
     step = (yrange/2)/stepmax  
     yrangemin = 1-(stepmax*step)
     yrangemax = 1+(stepmax*step)
@@ -449,7 +459,7 @@ def generate_newstraces(symbol_gresultdf):
 
     return traces
 
-def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral=True):
+def plotallplotly(gresultdf, prev_gresultdf, agg_tophdf, lambda_list=[1], sharey=True, withNeutral=True):
     numsymbols = len(list(gresultdf['symbol'].drop_duplicates()))
     numlambdas = len(lambda_list)
     fig = go.Figure()
@@ -577,6 +587,21 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
 
             # last trendchange
             #last_change = symbol_gresultdf.iloc[-1]
+
+            # top holdings
+            hovertext = str(agg_tophdf[agg_tophdf['yahoo_symbol']==symbol][['holdingName','holdingPercent.fmt']]).replace('\n','<br>')
+            
+            # prepare text for annotation
+            try:
+                #last_slope = (symbol_gresultdf['agg_slope_until_lambda_1'].iloc[-1] + symbol_gresultdf['prev_agg_slope_until_lambda_1'].dropna().iloc[-1])
+                last_slope = symbol_gresultdf['agg_slope_until_lambda_1'].iloc[-1]
+                #last_slope_change = symbol_gresultdf['agg_slopechange_lambda_1'].dropna().iloc[-1]
+                last_slope_change = (symbol_gresultdf['agg_slope_until_lambda_1'].iloc[-1] - symbol_gresultdf['prev_agg_slope_until_lambda_1'].dropna().iloc[-1])
+            except:
+                last_slope = 0.00
+                last_slope_change = 0.00
+                pass
+
             # Set subplot titles
             fig.add_annotation(
                 xref='x domain',
@@ -585,11 +610,24 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
                 y=0.99,
                 # get last slope
                 # get last slope change
+                align= 'left',
                 text=f"Symbol: {symbol} \
-                    last slope:{(symbol_gresultdf['agg_slope_until_lambda_1'].iloc[-1] + symbol_gresultdf['prev_agg_slope_until_lambda_1'].dropna().iloc[-1]):.4f} \
-                    last slope change:{symbol_gresultdf['agg_slopechange_lambda_1'].dropna().iloc[-1]:.4f} ",
+                    last slope:{last_slope:.4f} \
+                    last slope change:{last_slope_change:.4f} <br> \
+                        topholdings:{list(agg_tophdf[agg_tophdf['yahoo_symbol']==symbol]['symbol'])}",
                 showarrow=False,
+                #hovertemplate = '%{hovertext}',
+                hovertext=hovertext,
+                hoverlabel=dict(
+                    bgcolor="White",
+                    font=dict(
+                        size=12,
+                        color="Black"
+                    ),
+                ),
                 row=row, col=1)
+            
+            fig.update_layout(hoverlabel_align = 'left')
 
             # add sentimenten traces
             # test if there are sentiment news
@@ -609,7 +647,11 @@ def plotallplotly(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withN
     # Show the interactive plot
     pio.write_html(fig, f"data\\output_{datetime.datetime.now().strftime('%Y-%m-%d')}.html")
     fig.show()
+
 #rewrite plotallplotly to use ggresult
 #use small images in a grid to show the trendlines and the sentiment
+
+#use yfinance
+
 
 

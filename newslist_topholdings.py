@@ -71,7 +71,7 @@ def insert_sentiment_title_list(conn, dfsentiment, modelname= 'yiyanghkust/finbe
             print(str(e) + ' \ninsert_sql: '+ insert_sql +' \nund weiter...')
             pass
     conn.commit()
-    print(f'{modelname}: {str(index)} rows inserted')
+    #print(f'{modelname}: {str(index)} rows inserted')
     return conn
 
 def generate_plotdf(file_sentiment_result, file_sentiment_for_plot):
@@ -96,13 +96,7 @@ def generate_plotdf(file_sentiment_result, file_sentiment_for_plot):
 
     plot_df.to_csv(file_sentiment_for_plot)
 
-def newslist_topholdings(controllist, groupl=[10,40]):
-    #Variables
-    file_no_news = 'data\\no_news.csv'
-    file_newsdb = 'data/seeking-alpha.db'
-    file_sentiment_result=f"""data\\agg_top_sentiment_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
-    file_sentiment_for_plot=f"""data\\sentiment_plotdf_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
-
+def get_news(file_newsdb, controllist, groupl=[10,40]):
 
     # Laden der topholdings, die letzten 20 news zu jeder Holding von seekingalpha holen und in die newsdb speichern
     # Symbols aus Watchlist
@@ -132,10 +126,13 @@ def newslist_topholdings(controllist, groupl=[10,40]):
     no_news = pd.concat([no_news, new_no_news], axis=0)
     no_news.to_csv('data\\no_news.csv', index=False)
 
+
+def new_titles_sentimenten(file_newsdb): 
     # Die titles aus den news und mit FinBert den sentiment bewerten und in die newsdb speichern
     conn, tablenames = newsdb.create_connection(file_newsdb)
     if tablenames[tablenames.iloc[:,0].isin(['sentiment_title_list'])].shape[0] == 0:
-        create_table_sentiment_title_list(conn)
+        #create_table_sentiment_title_list(conn)
+        pass
 
     # neue Titles sind in list_by_symbol heruntergeladen und werden jetzt mit FINBERT bewertet 
     #welchen title id gibt's in der DB noch nicht
@@ -153,6 +150,8 @@ def newslist_topholdings(controllist, groupl=[10,40]):
 
     conn = insert_sentiment_title_list(conn, sentimentdf)
 
+
+def agg_sentiment(file_sentiment_result, file_newsdb, agg_tophdf):
     # Mit den Sentiments arbeiten
     # Falls ich hier anfange und die connection noch nicht da ist:
     conn, _  = newsdb.create_connection(file_newsdb)  
@@ -168,12 +167,31 @@ def newslist_topholdings(controllist, groupl=[10,40]):
     sentimentvaluedf = pd.DataFrame(sentimentvalued)
     sentimentdf['label']= sentimentvaluedf['label']
     sentimentdf['score']= sentimentvaluedf['score']
+    
     #joinen mit den fonds aus den topholdings
     agg_top_sentiment = pd.merge(agg_tophdf, sentimentdf, on='symbol', how='left')
     # publishDate Spalte, die das Datum ohne Uhrzeit enthält, das wird zum Aggregieren und spätre zum Joinen gebraucht 
     agg_top_sentiment['publishDate'] = pd.to_datetime(agg_top_sentiment['attributes.publishOn']).dropna().apply(lambda r:r.date())
     # speichern
     agg_top_sentiment.to_csv(file_sentiment_result)
+    print(file_sentiment_result)
+
+
+
+def newslist_topholdings(controllist, groupl=[10,40]):
+    #Variables
+    file_newsdb = 'data/seeking-alpha.db'
+    file_no_news = 'data\\no_news.csv'
+    file_sentiment_result=f"""data\\agg_top_sentiment_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
+    file_sentiment_for_plot=f"""data\\sentiment_plotdf_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"""
+
+    get_news(file_newsdb, controllist, groupl)
+
+    new_titles_sentimenten(file_newsdb)
+
+    _ , agg_tophdf = get_topholdings_for_controllist(controllist)
+
+    agg_sentiment(file_sentiment_result, file_newsdb, agg_tophdf)
 
     generate_plotdf(file_sentiment_result,file_sentiment_for_plot)
 
