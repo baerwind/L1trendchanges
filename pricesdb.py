@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import json
 import requests
+import glob
 
 def create_connection(db_file):
     """ create a database and tables connection to a SQLite database """
@@ -113,7 +114,6 @@ def create_json_table(conn):
     except sqlite3.Error as e:
         print(e)
 
-
 def delete_tableentries(conn, table, symbol, region, dates):
     """
     Delete existing tableentries  
@@ -130,7 +130,6 @@ def delete_tableentries(conn, table, symbol, region, dates):
         conn.commit()
     except sqlite3.Error as e:
         print(e + ' \nsql: '+sql)
-
 
 def get_tables(conn):
     sql = "SELECT name FROM sqlite_schema WHERE  type ='table' AND  name NOT LIKE 'sqlite_%';"
@@ -157,41 +156,19 @@ def get_prices_from_db(dbfile :str, fromdate :str = str(int(datetime.datetime.no
     prices_sorted = prices_sorted.reset_index(drop=True)
     return prices_sorted
 
-def get_topholdings_from_db(dbfile :str):
-    conn = create_connection(dbfile)
-    if conn is None:
-        exit()
-    sql = """select json_data from json_table \
-                where endpoint = 'topholdings' \
-                and date = (select max(date) from json_table);"""
-    cur = conn.cursor()
+def get_topholdings_from_db(symbol :str):
+    # get summary dict
+    json_data = get_summary_from_db(symbol=symbol)
     try:
-        cur.execute(sql)
-        json_data = cur.fetchall()
-    except sqlite3.Error as e:
-        print(e + ' \nsql: '+sql)
-
-    if json_data is None:
-        return None, None, None
-    else:    
-        try:
-            jsond = json.loads(json_data[0][0])
-            if jsond['quoteSummary']['result'] is not None:
-                # erste 0 für 1. Zeile, zweite 0 für 1. Teil im Tupel (Zeile)
-                # besser wäre ein resultset als Daraframe
-                try:
-                    holdings = jsond['quoteSummary']['result'][0]['topHoldings']['holdings']
-                    df = pd.json_normalize(holdings)
-                    return df, holdings, jsond
-                except KeyError:
-                    print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
-                    return None, None, jsond
-            else:
-                print(f"""{dbfile} Key: jsond['quoteSummary']['result'][0]['topHoldings']['holdings'] does not exist""")
-                return None, None, jsond
-        except Exception as e:
-            print(f"""{dbfile} Fehler mit json: {json_data}""")
-            return None, None, None
+        summaryd = json.loads(json_data[0][0])
+        toph = summaryd['topHoldings']['holdings']
+        toph_df = pd.json_normalize(toph)
+        return toph_df, toph, summaryd
+    except:
+        print(f"""{symbol} summary json None or keys summaryd['topHoldings']['holdings'] does not exist""")
+        toph = None
+        toph_df = None
+        return toph_df, toph, summaryd
         
 def request_build_headers():
     headers = {
@@ -279,7 +256,6 @@ def get_summary(symbol, region):
         pass
     return json_data
 
-
 def get_summary_update_dbs(symbol, region):
     """
     --CREATE TABLE my_table (id INTEGER PRIMARY KEY, json_data JSON);
@@ -310,7 +286,7 @@ def get_summary_update_dbs(symbol, region):
         try:
             cur.execute(sql)
             conn.commit()
-            print(f'topholdings updated for {symbol}_{region}')
+            print(f'summary updated for {symbol}_{region}')
         except sqlite3.Error as e:
             print(str(e) + ' \nsql: '+sql)
             print(f"""INSERT INTO json_table (date, symbol, region, endpoint) VALUES ('{date}','{symbol}','{region}','{endpoint}') - error but continue""")
@@ -318,6 +294,23 @@ def get_summary_update_dbs(symbol, region):
 
     return conn
 
+def get_summary_from_db(symbol, region='US'):
+    f = glob.glob(r"data/"+symbol + "_*.db")[0]
+    conn = create_connection(f)
+    if conn is None:
+        exit()
+    sql = """select json_data from json_table \
+                where endpoint = 'summary' \
+                and date = (select max(date) from json_table where endpoint = 'summary');"""
+    cur = conn.cursor()
+
+    try:
+        cur.execute(sql)
+        json_data = cur.fetchall()
+    except sqlite3.Error as e:
+        print(e + ' \nsql: '+sql)
+    
+    return json_data
 
 
 def get_historical_data(symbol, region):

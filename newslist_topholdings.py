@@ -26,8 +26,8 @@ def get_topholdings_for_controllist(controllist):
     # die topholdings der watchlist ETFs aus den DBs holen und aggregieren
     agg_tophdf = pd.DataFrame()
     for i in range(len(controllist)):
-        f = glob.glob(r"data/"+controllist['yahoo_symbol'][i] + "_*.db")[0]
-        tophdf, _, _ = pricesdb.get_topholdings_from_db(f)
+        #f = glob.glob(r"data/"+controllist['yahoo_symbol'][i] + "_*.db")[0]
+        tophdf, _, _ = pricesdb.get_topholdings_from_db(controllist['yahoo_symbol'][i])
         if tophdf is not None:
             tophdf['yahoo_symbol'] = controllist['yahoo_symbol'][i]
             try:

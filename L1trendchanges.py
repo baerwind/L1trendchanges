@@ -166,8 +166,8 @@ def get_prices_toph(controllist):
         region = controllist['region'].iloc[i]
         
         conn = pricesdb.get_prices_update_dbs(symbol, region)
-        conn = pricesdb.get_topholdings_update_dbs(symbol,region)
-
+        #conn = pricesdb.get_topholdings_update_dbs(symbol,region)
+        conn = pricesdb.get_summary_update_dbs(symbol,region)
 
 def calc_l1trendchanges(controllist):
     # Hauptroutine
@@ -188,7 +188,7 @@ def calc_l1trendchanges(controllist):
     for i, yahoo_symbol in enumerate(controllist['yahoo_symbol']):
         f = glob.glob(r"data/"+ yahoo_symbol + "_*.db")[0]
         prices_sorted = pricesdb.get_prices_from_db(f)
-        topholdingsdf, _, _ = pricesdb.get_topholdings_from_db(f)
+        topholdingsdf, _, _ = pricesdb.get_topholdings_from_db(yahoo_symbol)
         gtophdf = pd.concat([gtophdf,topholdingsdf])
         
         #pricesd, trendlinedl, trendchangesdl, aggtchangesl, resultdf = transform_calc_trendlines(prices_sorted, lambda_list, solver, reg_norm)
@@ -588,8 +588,27 @@ def plotallplotly(gresultdf, prev_gresultdf, agg_tophdf, lambda_list=[1], sharey
             # last trendchange
             #last_change = symbol_gresultdf.iloc[-1]
 
+
+            # get summary dict
+            json_data = pricesdb.get_summary_from_db(symbol=symbol)
+            try:
+                summaryd = json.loads(json_data[0][0])
+                shortName = summaryd['quoteType']['shortName']
+                currency = summaryd['price']['currency']
+                quoteType = summaryd['quoteType']['quoteType']
+                toph = summaryd['topHoldings']['holdings']
+                toph_df = pd.json_normalize(toph)
+                list_toph = toph_df['symbol'].to_list()
+                hovertext = str(toph_df[['holdingName','holdingPercent.fmt']]).replace('\n','<br>')
+            except:
+                print(f"""{symbol} summary json None or keys summaryd['topHoldings']['holdings'] does not exist""")
+                toph = ''
+                list_toph = ''
+                hovertext = ''
+                pass
+
             # top holdings
-            hovertext = str(agg_tophdf[agg_tophdf['yahoo_symbol']==symbol][['holdingName','holdingPercent.fmt']]).replace('\n','<br>')
+            #hovertext = str(agg_tophdf[agg_tophdf['yahoo_symbol']==symbol][['holdingName','holdingPercent.fmt']]).replace('\n','<br>')
             
             # prepare text for annotation
             try:
@@ -602,19 +621,22 @@ def plotallplotly(gresultdf, prev_gresultdf, agg_tophdf, lambda_list=[1], sharey
                 last_slope_change = 0.00
                 pass
 
+
             # Set subplot titles
             fig.add_annotation(
                 xref='x domain',
                 yref='y domain',
                 x=0.01,
                 y=0.99,
-                # get last slope
-                # get last slope change
                 align= 'left',
-                text=f"Symbol: {symbol} \
-                    last slope:{last_slope:.4f} \
-                    last slope change:{last_slope_change:.4f} <br> \
-                        topholdings:{list(agg_tophdf[agg_tophdf['yahoo_symbol']==symbol]['symbol'])}",
+                text=f"Symbol:{symbol} "+\
+                f"last slope:{last_slope:.4f} "+\
+                f"last slope change:{last_slope_change:.4f}<br>"+\
+                f"shortName: {shortName} "+\
+                f"currency: {currency}<br>"+\
+                f"quoteType: {quoteType}<br>"+\
+                f"topholdings:{list_toph}",
+
                 showarrow=False,
                 #hovertemplate = '%{hovertext}',
                 hovertext=hovertext,
