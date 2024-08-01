@@ -165,7 +165,8 @@ def get_prices_toph(controllist):
         symbol = controllist['yahoo_symbol'].iloc[i]
         region = controllist['region'].iloc[i]
         
-        conn = pricesdb.get_prices_update_dbs(symbol, region)
+        #conn = pricesdb.get_prices_update_dbs_rapi(symbol, region)
+        conn = pricesdb.get_prices_update_dbs_yfinance(symbol)
         #conn = pricesdb.get_topholdings_update_dbs(symbol,region)
         conn = pricesdb.get_summary_update_dbs(symbol,region)
 
@@ -412,7 +413,6 @@ def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
-import plotly.express as px
 
 # plot newstraces
 def add_news_traces(publishDate, yl, text, colorstr, traces):
@@ -631,7 +631,8 @@ def plotallplotly(gresultdf, prev_gresultdf, agg_tophdf, lambda_list=[1], sharey
                 align= 'left',
                 text=f"Symbol:{symbol} "+\
                 f"last slope:{last_slope:.4f} "+\
-                f"last slope change:{last_slope_change:.4f}<br>"+\
+                f"last slope change:{last_slope_change:.4f} "+\
+                f"last_date: {symbol_gresultdf['date'].max().strftime('%Y-%m-%d')}<br>"+\
                 f"shortName: {shortName} "+\
                 f"currency: {currency}<br>"+\
                 f"quoteType: {quoteType}<br>"+\

@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import requests
 import glob
+import yfinance as yf
 
 def create_connection(db_file):
     """ create a database and tables connection to a SQLite database """
@@ -122,8 +123,15 @@ def delete_tableentries(conn, table, symbol, region, dates):
     :dates: dates list
     :return:
     """
-    sql = f"DELETE FROM {table} WHERE symbol='{symbol}' and region = '{region}' and date in ({dates})"
-    #print(sql)
+    # dates fürs löschen in ganze Datümer umwandeln damit bei verschiedenen Uhrzeiten keine doppelten entstehen
+    # aber dates trotzdem mit Uhrzeit speichern 
+    #type(dates)
+    datestr = [date.strftime('%Y-%m-%d')  for date in dates]
+
+    #sql = f"DELETE FROM {table} WHERE symbol='{symbol}' and region = '{region}' and date in ({dates})"
+    sql = f"DELETE FROM {table} WHERE symbol='{symbol}' and region = '{region}' and strftime('%Y-%m-%d',date) in ({str(datestr)[1:-1]})"
+
+    print(sql)
     cur = conn.cursor()
     try:
         cur.execute(sql)
@@ -313,7 +321,7 @@ def get_summary_from_db(symbol, region='US'):
     return json_data
 
 
-def get_historical_data(symbol, region):
+def get_historical_data_from_rapi(symbol, region):
     """
     get data from yahoo
     """
@@ -335,10 +343,57 @@ def get_historical_data(symbol, region):
         pass
     return df1, response.status_code
 
-def get_prices_update_dbs(symbol, region):
+def get_historical_data_from_yfinance(symbol, region= 'US'):
+    """
+    get data from yahoo
+    """
+    ticker = yf.Ticker(symbol)
+
+    # get all stock info
+    #ticker.info
+
+    # get historical market data
+    hist = ticker.history(period="1y")
+    return hist, '200'
+
+def get_prices_update_dbs_yfinance(symbol, region= 'US'):
+    prices, status_code = get_historical_data_from_yfinance(symbol, region)
+    prices = prices.reset_index()
+    prices.columns = [col.lower() for col in prices.columns]
+    # Spalten ergänzen
+    prices['symbol'] = symbol
+    prices['region'] = region
+    # Datümer umwandeln
+    #prices['date'] = pd.to_datetime(prices['date'], unit='s')
+    prices['date'] = pd.to_datetime(prices['date']).dt.tz_localize(None)
+    prices['updatedt'] = datetime.datetime.today()
+    prices = prices[['date','open','high','low','close','volume','symbol','region','updatedt']]
+
+    # connection 
+    # bei neuem symbol wird automatisch eine neue db generiert
+    conn = create_connection(r"data/"+symbol+"_"+region+".db")
+
+    # schon vorhandene aus DB löschen, damit neue überschrieben werden können
+    dates = prices['date'].drop_duplicates()
+    #datesl = [str(date) for date in dates]
+    #delete_tableentries(conn, 'prices', symbol, region, str(datesl)[1:-1])
+    delete_tableentries(conn, 'prices', symbol, region, dates)
+    # prices in db schreiben
+    try:
+        prices.to_sql('prices', conn, if_exists='append' , index=False)
+        print(f'DB updated for {symbol}_{region}')
+    except sqlite3.Error as e:
+        print(e)
+        print(f"""{symbol}_{region} - pricesdb.prices.to_sql('prices', conn, if_exists='append' , index=False) - error but continue""")
+        pass
+    conn.close()
+    return conn
+
+
+def get_prices_update_dbs_rapi(symbol, region, source = 'yfinance'):
     print(f'{symbol}_{region}')    
     # raw_prices aus rapi
-    raw_prices, status_code = get_historical_data(symbol,region)
+    raw_prices, status_code = get_historical_data_from_rapi(symbol,region)
     print('status_code:' + str(status_code) + ' raw_prices:' + str(raw_prices)[:100] )
     if raw_prices is None:
         print(f'No prices found in JSON response for {symbol}_{region}, status_code:{status_code}')
@@ -350,8 +405,8 @@ def get_prices_update_dbs(symbol, region):
     if raw_prices['prices'][0] == []:
         print(f'No prices found in JSON response for {symbol}_{region}, status_code:{status_code}')
         return None        
-
     prices = pd.DataFrame(raw_prices['prices'][0])
+    
     # Spalten ergänzen
     prices['symbol'] = symbol
     prices['region'] = region
