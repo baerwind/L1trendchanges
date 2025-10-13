@@ -6,6 +6,7 @@ import json
 import requests
 import glob
 import yfinance as yf
+import time
 
 def create_connection(db_file):
     """ create a database and tables connection to a SQLite database """
@@ -354,10 +355,13 @@ def get_historical_data_from_yfinance(symbol, region= 'US'):
 
     # get historical market data
     hist = ticker.history(period="1y")
+    # hist1m = ticker.history(period="5d", interval="1m")
+    # hist1m.to_csv(f"{datetime.datetime.now().strftime("%Y%m%d")}_{symbol}_1m.csv")
     return hist, '200'
 
 def get_prices_update_dbs_yfinance(symbol, region= 'US'):
     prices, status_code = get_historical_data_from_yfinance(symbol, region)
+    #time.sleep(1)  # um die API nicht zu überlasten
     prices = prices.reset_index()
     prices.columns = [col.lower() for col in prices.columns]
     # Spalten ergänzen

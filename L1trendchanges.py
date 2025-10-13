@@ -87,6 +87,18 @@ def calc_bs_signals(trendchangesd, trendlined):
 
     return aggtchanges
 
+def close_start_1(prices):
+    """
+    close_start_1:
+    """
+    close_prices = prices['close'].copy().to_numpy()
+    # log warum eigentlich? Ohne log scheint der Algorithmus instabil zu sein? 
+    #close_prices = np.log(close_prices)
+    # Versuch mit Skalierung auf 1
+    factor = close_prices[0] # bei 1 geht es los
+    close_prices *=(1.0/factor)
+    return close_prices
+
 def transform_calc_trendlines(prices, lambda_list, solver, reg_norm):
     """
     transforms und executes calculation, from one df of prices with lists of lambdas and 
@@ -98,12 +110,7 @@ def transform_calc_trendlines(prices, lambda_list, solver, reg_norm):
     prices = prices.sort_values(by='date',ascending=True)
     # drop 
     prices = prices.dropna(subset=['close'])
-    close_prices = prices['close'].copy().to_numpy()
-    # log warum eigentlich? Ohne log scheint der Algorithmus instabil zu sein? 
-    #close_prices = np.log(close_prices)
-    # Versuch mit Skalierung auf 1
-    factor = close_prices[0] # bei 1 geht es los
-    close_prices *=(1.0/factor)
+    close_prices = close_start_1(prices)
     prices['close_start_1'] = close_prices
 
     trendlinesl, trendchangesl = calc_trendlines(close_prices, lambda_list, solver, reg_norm)
@@ -206,6 +213,10 @@ def calc_l1trendchanges(controllist):
     gresultdf.to_csv(f"data\\gresult {datetime.datetime.now().strftime('%Y-%m-%d')}.csv")
     prev_gresultdf.to_csv(f"data\\prev_gresult {datetime.datetime.now().strftime('%Y-%m-%d')}.csv")
 
+def calc_prophet_preds(controllist):
+    pass
+    return None
+
 def generate_ggresult_from_data():
     #neueste sentimentDaten lesen
     f = glob.glob('data//sentiment_plotdf_*.csv')
@@ -281,7 +292,6 @@ def plot_sentiment(ax, symbolgresult, withNeutral=True):
             ax_sentiment.vlines(symbolgresult['Neutral'].index, -0.5, 0.5 , color=color_map['Neutral'], linewidth=1, linestyles='dashed')
         ax_sentiment.vlines(symbolgresult['Negative'].index, 0, -symbolgresult['Negative'], color=color_map['Negative'], linewidth=1, linestyles='dashed')
         ax_sentiment.axhspan(0, 0, xmin=0, xmax=1,color='tab:grey')
-
 
 def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral=True):
     # Ab hier Darstellung
@@ -407,8 +417,6 @@ def plotall(gresultdf, prev_gresultdf, lambda_list=[1], sharey=True, withNeutral
             #the_table.visible_edges = 'B'
             ax[row,0].set_axis_off()
             ax[row,0].add_table(the_table)
-
-
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
